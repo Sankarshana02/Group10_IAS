@@ -10,6 +10,8 @@ from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from nltk.tokenize import WordPunctTokenizer
 from bs4 import BeautifulSoup
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
 
 app = Flask(__name__)
 
@@ -54,8 +56,8 @@ def setup_database():
 
 setup_database()
 
-tfidf = pickle.load(open(os.path.join(BASE_DIR, "vectorizer.pkl"), "rb"))
-model = pickle.load(open(os.path.join(BASE_DIR, "model.pkl"), "rb"))
+# tfidf = pickle.load(open(os.path.join(BASE_DIR, "vectorizer.pkl"), "rb"))
+# model = pickle.load(open(os.path.join(BASE_DIR, "model.pkl"), "rb"))
 
 FACT_CHECK_API_KEY = "AIzaSyBPpHQNpjdmV7mh5xysZ3PxIWQrbdQnWFs"
 FACT_CHECK_URL = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
@@ -66,6 +68,15 @@ CLAIMBUSTER_KB_API_URL = "https://idir.uta.edu/claimbuster/api/v2/query/knowledg
 
 ps = PorterStemmer()
 nltk.download("stopwords")
+
+# Define device and relative path to the multilingual model directory
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ML_MODEL_PATH = os.path.join(BASE_DIR, "../multilingual_model/best")
+
+# Load tokenizer and model from Hugging Face format
+tokenizer = AutoTokenizer.from_pretrained(ML_MODEL_PATH)
+model = AutoModelForSequenceClassification.from_pretrained(ML_MODEL_PATH).to(device)
 
 def text_processing(text):
     text = str(text)
@@ -139,6 +150,22 @@ def check_claimbuster_knowledge(query_text):
 
     except Exception as e:
         return [{"claim_text": "Error fetching ClaimBuster Knowledge Base", "verdict": str(e)}]
+    
+def useMultilingual(someText):
+    inputs = tokenizer(someText, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
+    
+    with torch.no_grad():
+        outputs = model(**inputs)
+        logits = outputs.logits
+    
+    predicted_class_id = logits.argmax(dim=-1).item()
+    predicted_label = model.config.id2label[predicted_class_id]
+    
+    return predicted_label
+
+testString = "選挙制度の変更をめぐっては、香港の反体制派が実質的に消滅するとの批判が出ている 採択された決定案では、香港の選挙において、民主的に選出される候補者を減らし、中国政府寄りの委員会が審査で認める「愛国的な」候補者を増やす。 この案の採択は広く予想されていた。 この日の全人代では、賛成2895、反対0、棄権1で採択された。 詳細な内容はこれから作成され、数カ月以内に香港で施行されるとみられる。 全人代には数千人の代表者が集まった 昨年の全人代では、香港国家安全維持法（国安法）案を可決した。実質的に香港の自治権を弱め、デモ参加者の処罰を簡単にする内容で、やはり強い批判を招いていた。 昨年6月に国案法が施行されて以降、香港では何十人もが同法違反容疑で拘束されている。 毎年開催される全人代は5日に開幕。中国で最も影響力がある政治諮問機関、中国人民政治協商会議（CPPCC）とほぼ並行して開催されてきた。 それらは2大会議として知られ、1週間にわたって続く。 今年の全人代では、経済成長目標や環境政策も政府によって議題とされ、ともに承認された。"
+predicted_label = useMultilingual(testString)
+print(f"Predicted Label: {predicted_label}")
 
 @app.route("/")
 def home():
@@ -150,10 +177,11 @@ def predict():
         input_text = request.form["text"]
 
         processed_text = text_processing(input_text)
-        ip_vec = tfidf.transform([processed_text])
-        model_result = model.predict(ip_vec)[0]
+        # ip_vec = tfidf.transform([processed_text])
+        # model_result = model.predict(ip_vec)[0]
 
-        model_prediction = "Genuine" if model_result == 1 else "Fake"
+        # model_prediction = "Genuine" if model_result == 1 else "Fake"
+        model_prediction = "N/A"
 
         fact_check_results = check_fact_google(input_text)
 
