@@ -95,15 +95,12 @@ The system includes:
    
    cd fake-content-detection
    ```
-2. **Install dependencies**  
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Run the Flask server**  
+   
+2. **Run the Flask server**  
    ```bash
    python app.py
    ```
-4. **Access the system ats**
+3. **Access the system ats**
    ```bash
    http://localhost:5000
    ```
